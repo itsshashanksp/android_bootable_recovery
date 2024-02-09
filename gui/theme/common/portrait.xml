@@ -737,13 +737,10 @@
                			<listitem name="{@zip_sig_chk=Zip signature verification}">
 					<data variable="tw_signed_zip_verify"/>
 				</listitem>
-				<listitem name="{@patch_avb2=Patch AVB2.0 Verity}">
-					<data variable="pb_req_patch_avb2"/>
-				</listitem>
 				<listitem name="{@auto_reflashtwrp_chk=Automatically Reflash TWRP after flashing a ROM}">
 					<conditions>
 						<condition var1="tw_has_boot_slots" var2="1"/>
-						<condition var1="tw_has_repack_tools" var2="1"/>
+						<condition var1="tw_is_vendor_boot_header_v3" var2="0"/>
 					</conditions>
 					<data variable="tw_auto_reflashtwrp"/>
 				</listitem>
@@ -760,13 +757,6 @@
 				<listitem name="{@pb_enable_dmesg_logging=Include DMESG in Logs}">
 					<condition var1="pb_include_logs_after_flash" var2="1" />
 					<data variable="pb_include_dmesg_logging"/>
-				</listitem>
-				<listitem name="{@pb_dmverity_chk=Deactivation (Patch DM-Verity)}">
-					<data variable="pb_dm_verity_check"/>
-				</listitem>
-				<listitem name="{@pb_for_en_chk=Advance Disable Forced Encryption}">
-					<condition var1="pb_dm_verity_check" var2="1"/>
-					<data variable="pb_advance_encry"/>
 				</listitem>
 			</listbox>
 
@@ -4191,7 +4181,7 @@
 				<listitem name="{@auto_reflashtwrp_chk=Automatically Reflash TWRP after flashing a ROM}">
 					<conditions>
 						<condition var1="tw_has_boot_slots" var2="1"/>
-						<condition var1="tw_has_repack_tools" var2="1"/>
+						<condition var1="tw_is_vendor_boot_header_v3" var2="0"/>
 					</conditions>
 					<data variable="tw_auto_reflashtwrp"/>
 				</listitem>
@@ -4653,6 +4643,7 @@
 				</listitem>
 				<listitem name="{@install_twrp_ramdisk=Install Recovery Ramdisk}">
 					<condition var1="tw_has_boot_slots" var2="1"/>
+					<condition var1="tw_include_install_recovery_ramdisk" var2="1"/>
 					<text>{@install_twrp_ramdisk1=Install Recovery Ramdisk}</text>
 					<icon icon="main_button_fixcontexts"/>
 					<actions>
@@ -4664,6 +4655,7 @@
 					<conditions>
 						<condition var1="tw_has_boot_slots" var2="1"/>
 						<condition var1="tw_has_repack_tools" var2="1"/>
+						<condition var1="tw_is_vendor_boot_header_v3" var2="0"/>
 					</conditions>
 					<text>{@reflash_current_pbrp=Flash Current PBRP}</text>
 					<icon icon="main_button_install_alt"/>

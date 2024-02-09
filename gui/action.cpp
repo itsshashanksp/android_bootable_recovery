@@ -1324,14 +1324,6 @@ int GUIAction::flash(std::string arg)
         if (reinject_after_flash() == 0) {
 		PartitionManager.Update_System_Details();
 	}
-	if (DataManager::GetIntValue(PB_INSTALL_PREBUILT_ZIP) != 1)
-	{
-		if (DataManager::GetIntValue(PB_CALL_DEACTIVATION) != 0 && ret_val != 1)//get to know whether everything is ok or not
-		{
-			TWFunc::Deactivation_Process();
-		}
-		DataManager::SetValue(PB_CALL_DEACTIVATION, 0);
-	}
 	gui_highlight("pb_saving_log=Preserving Logs...\n");
 	copylog(zip_filename);
 	DataManager::SetValue(TRB_EN, 0); //Reset At end
@@ -2047,12 +2039,6 @@ int GUIAction::flashimage(std::string arg __unused)
 		else
 			op_status = 1; // fail
 	}
-	// Start Deactivation on flashing either boot.img, system.img or vendor.img
-	if (DataManager::GetIntValue(PB_CALL_DEACTIVATION) != 0)
-	{
-		TWFunc::Deactivation_Process();
-	}
-	DataManager::SetValue(PB_CALL_DEACTIVATION, 0);
 	DataManager::GetValue("tw_flash_partition", partition);
 	if (partition == "/repack_ramdisk;" || partition == "/repack_kernel;" || partition == "/recovery;")
 		keycheck("recovery.img");
@@ -2189,7 +2175,7 @@ int GUIAction::setbootslot(std::string arg)
 				// PartitionManager failed to unmount /vendor, this should not happen,
 				// but in case it does, do a lazy unmount
 				LOGINFO("WARNING: vendor partition could not be unmounted normally!\n");
-				umount2("/vendor", MNT_DETACH);
+				PartitionManager.UnMount_By_Path("/vendor", false, MNT_DETACH);
 			}
 		}
 		PartitionManager.Set_Active_Slot(arg);

@@ -24,7 +24,7 @@
 
 #define TW_DEVICE_VERSION	   PB_BUILD
 
-#define TW_MAIN_VERSION_STR       "3.7.0_12"
+#define TW_MAIN_VERSION_STR       "3.7.1_12"
 #define TW_VERSION_STR TW_MAIN_VERSION_STR PB_MAIN_BUILD
 
 #define TW_STORAGE_PATH             "/data/recovery/"
@@ -154,9 +154,10 @@
 #define TW_AUTO_REFLASHTWRP_VAR     "tw_auto_reflashtwrp"
 
 // BUILD PROPS
-#define TW_READ_ADDITIONAL_FSTAB_PROP "ro.tw.addition_fstab"
 #define TW_FASTBOOT_MODE_PROP       "ro.twrp.fastbootd"
 #define TW_MODULES_MOUNTED_PROP     "twrp.modules.loaded"     // property for successfully mounted modules
+#define TW_KEYMASTER_VERSION_PROP   "keymaster_ver"
+
 // Theme versioning
 // version 2 requires theme to handle power button as action togglebacklight
 // version 4 adds listbox support to reboot page
@@ -182,10 +183,7 @@
 #define PB_CALL_DEACTIVATION         "pb_call_deactivation_process"
 #define PB_MIN_EXPECTED_FP_SIZE 30
 #define PB_DISABLE_SECURE_BOOT           "pb_reboot_disable_secure_boot"
-#define PB_DISABLE_FORCED_ENCRYPTION           "pb_forced_encryption_check"
 #define PB_ENABLE_ADVANCE_ENCRY		"pb_advance_encry"
-#define PB_DISABLE_DM_VERITY           "pb_dm_verity_check"
-#define PB_PATCH_AVB2           "pb_req_patch_avb2"
 #define PB_SURVIVAL_FOLDER_VAR      "pb_survival_backup_folder_path"
 #define PB_TMP_SCRIPT_DIR       "pb_tmp_script_directory"
 #define PB_COMPATIBILITY_DEVICE         "pb_compatibility_pb_device"

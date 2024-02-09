@@ -252,8 +252,6 @@ ifeq ($(TW_INCLUDE_CRYPTO), true)
 		RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/android.hardware.vibrator@1.2.so
 		RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/android.hardware.vibrator-V1-ndk_platform.so
 		RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/android.hardware.vibrator-V1-cpp.so
-		RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/android.hardware.vibrator-V2-cpp.so
-		RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/android.hardware.vibrator-V2-ndk_platform.so
 		RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libstatslog.so
 		RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libsoft_attestation_cert.so
 		RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libdiskconfig.so
@@ -301,6 +299,10 @@ ifeq ($(TW_INCLUDE_CRYPTO), true)
 		#RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libssl.so
 		#RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libhidl-gen-hash.so
 	endif
+endif
+ifneq ($(filter $(TW_INCLUDE_CRYPTO) $(TW_SUPPORT_INPUT_AIDL_HAPTICS), true),)
+    RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/android.hardware.vibrator-V2-cpp.so
+    RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/android.hardware.vibrator-V2-ndk_platform.so
 endif
 ifeq ($(AB_OTA_UPDATER), true)
 	RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_EXECUTABLES)/system/bin/update_engine_sideload
@@ -419,6 +421,18 @@ ifeq ($(TARGET_ARCH), mips64)
 endif
 RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/liblogwrap.so
 RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libext2_misc.so
+
+ifneq ($(TW_EXCLUDE_NANO), true)
+    RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_SYSTEM_EXT_EXECUTABLES)/nano
+    RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SYSTEM_EXT_SHARED_LIBRARIES)/libncurses.so
+    RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_VENDOR_SHARED_LIBRARIES)/libssh.so
+    RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libssl.so
+endif
+
+ifneq ($(TW_EXCLUDE_BASH), true)
+    RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_SYSTEM_EXT_EXECUTABLES)/bash
+    RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SYSTEM_EXT_SHARED_LIBRARIES)/libncurses.so
+endif
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := relink_libraries
@@ -545,3 +559,33 @@ ifneq ($(TW_EXCLUDE_TZDATA), true)
         cp -f $(TARGET_OUT)/usr/share/zoneinfo/tzdata $(TARGET_RECOVERY_ROOT_OUT)/system/usr/share/zoneinfo/;
     include $(BUILD_PHONY_PACKAGE)
 endif
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := nano_twrp
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_PATH := $(TARGET_ROOT_OUT)/system/bin
+LOCAL_REQUIRED_MODULES := nano libncurses
+LOCAL_POST_INSTALL_CMD += \
+    cp -rf $(TARGET_OUT_SYSTEM_EXT_ETC)/nano $(TARGET_RECOVERY_ROOT_OUT)/system/etc/; \
+    cp -rf external/libncurses/lib/terminfo $(TARGET_RECOVERY_ROOT_OUT)/system/etc/;
+include $(BUILD_PHONY_PACKAGE)
+
+ifneq ($(TW_EXCLUDE_BASH), true)
+	include $(CLEAR_VARS)
+	LOCAL_MODULE := bash_twrp
+	LOCAL_MODULE_TAGS := optional
+	LOCAL_MODULE_CLASS := ETC
+	LOCAL_MODULE_PATH := $(TARGET_ROOT_OUT)/system/bin
+	LOCAL_REQUIRED_MODULES := bash
+
+	LOCAL_POST_INSTALL_CMD += \
+		mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/system/etc/bash/; \
+		cp -rf external/bash/etc/* $(TARGET_RECOVERY_ROOT_OUT)/system/etc/bash/; \
+        sed -i 's/ro.lineage.device/ro.product.device/' $(TARGET_RECOVERY_ROOT_OUT)/system/etc/bash/bashrc; \
+        sed -i '/export TERM/d' $(TARGET_RECOVERY_ROOT_OUT)/system/etc/bash/bashrc; \
+        mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/sbin; \
+        ln -sf /system/bin/bash $(TARGET_RECOVERY_ROOT_OUT)/sbin/bash;
+	include $(BUILD_PHONY_PACKAGE)
+endif
+

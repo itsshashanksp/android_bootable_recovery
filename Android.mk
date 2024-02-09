@@ -56,7 +56,7 @@ else
     LOCAL_CFLAGS += -DPB_MAIN_BUILD='"-UNOFFICIAL"'
 endif
 
-DEVICE := $(subst omni_,,$(TARGET_PRODUCT))
+DEVICE := $(subst pb_,,$(TARGET_PRODUCT))
 
 ifeq ($(PB_DEVICE_MODEL),)
     LOCAL_CFLAGS += -DPB_DEVICE_MODEL='"$(DEVICE)"'
@@ -71,14 +71,6 @@ ifeq ($(PB_FORCE_DD_FLASH),true)
     LOCAL_CFLAGS += -DPB_FORCE_DD_FLASH='true'
 endif
 LOCAL_CFLAGS += -DPLATFORM_SDK_VERSION=$(PLATFORM_SDK_VERSION)
-
-ifeq ($(PB_DISABLE_DEFAULT_DM_VERITY),true)
-    LOCAL_CFLAGS += -DPB_DISABLE_DEFAULT_DM_VERITY=$(PB_DISABLE_DEFAULT_DM_VERITY)
-endif
-
-ifeq ($(PB_DISABLE_DEFAULT_PATCH_AVB2),true)
-    LOCAL_CFLAGS += -DPB_DISABLE_DEFAULT_PATCH_AVB2=$(PB_DISABLE_DEFAULT_PATCH_AVB2)
-endif
 
 ifeq ($(PB_DISABLE_DEFAULT_TREBLE_COMP),true)
     LOCAL_CFLAGS += -DPB_DISABLE_DEFAULT_TREBLE_COMP=$(PB_DISABLE_DEFAULT_TREBLE_COMP)
@@ -179,6 +171,8 @@ ifeq ($(TW_OEM_BUILD),true)
     TW_USE_TOOLBOX := true
     TW_EXCLUDE_MTP := true
     TW_EXCLUDE_TZDATA := true
+    TW_EXCLUDE_NANO := true
+    TW_EXCLUDE_BASH := true
 endif
 
 ifeq ($(AB_OTA_UPDATER),true)
@@ -201,6 +195,15 @@ endif
 
 ifneq ($(TW_SYSTEM_BUILD_PROP_ADDITIONAL_PATHS),)
     LOCAL_CFLAGS += -DTW_SYSTEM_BUILD_PROP_ADDITIONAL_PATHS='"$(TW_SYSTEM_BUILD_PROP_ADDITIONAL_PATHS)"'
+endif
+
+ifneq ($(BOARD_BOOT_HEADER_VERSION),)
+    LOCAL_CFLAGS += -DBOARD_BOOT_HEADER_VERSION=$(BOARD_BOOT_HEADER_VERSION)
+endif
+
+ifeq ($(BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT),true)
+    TW_INCLUDE_REPACKTOOLS := true
+    LOCAL_CFLAGS += -DBOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT
 endif
 
 ifeq ($(TW_PREPARE_DATA_MEDIA_EARLY),true)
@@ -232,6 +235,7 @@ ifeq ($(TW_EXCLUDE_MTP),)
     LOCAL_SHARED_LIBRARIES += libtwrpmtp-ffs
 endif
 ifeq ($(BOARD_USES_RECOVERY_AS_BOOT), true)
+    TW_INCLUDE_REPACKTOOLS := true
     LOCAL_CFLAGS += -DBOARD_USES_RECOVERY_AS_BOOT
 endif
 ifeq ($(BOARD_BUILD_SYSTEM_ROOT_IMAGE), true)
@@ -331,6 +335,9 @@ ifneq ($(TW_LOAD_VENDOR_MODULES),)
     ifeq ($(TW_LOAD_VENDOR_MODULES_EXCLUDE_GKI),true)
         LOCAL_CFLAGS += -DTW_LOAD_VENDOR_MODULES_EXCLUDE_GKI
     endif
+    ifeq ($(TW_LOAD_VENDOR_BOOT_MODULES),true)
+        LOCAL_CFLAGS += -DTW_LOAD_VENDOR_BOOT_MODULES
+    endif
 endif
 ifeq ($(TW_INCLUDE_CRYPTO), true)
     LOCAL_CFLAGS += -DTW_INCLUDE_CRYPTO -DUSE_FSCRYPT -Wno-macro-redefined
@@ -383,12 +390,21 @@ ifneq ($(TW_SECONDARY_BRIGHTNESS_PATH),)
 endif
 ifneq ($(TW_MAX_BRIGHTNESS),)
 	LOCAL_CFLAGS += -DTW_MAX_BRIGHTNESS=$(TW_MAX_BRIGHTNESS)
+else
+    ifneq ($(TW_NO_SCREEN_BLANK),)
+        TW_MAX_BRIGHTNESS ?= 1023
+        $(call pretty-warning,TW_MAX_BRIGHTNESS must be defined if using TW_NO_SCREEN_BLANK. Setting to default value: $(TW_MAX_BRIGHTNESS). If you would like to use a different value then please update your device tree with the correct value from your device.)
+    endif
 endif
 ifneq ($(TW_DEFAULT_BRIGHTNESS),)
 	LOCAL_CFLAGS += -DTW_DEFAULT_BRIGHTNESS=$(TW_DEFAULT_BRIGHTNESS)
 endif
+ifeq ($(TW_USE_LEGACY_BATTERY_SERVICES),true)
+    LOCAL_CFLAGS += -DTW_USE_LEGACY_BATTERY_SERVICES
+endif
 ifneq ($(TW_CUSTOM_BATTERY_PATH),)
-	LOCAL_CFLAGS += -DTW_CUSTOM_BATTERY_PATH=$(TW_CUSTOM_BATTERY_PATH)
+    TW_USE_LEGACY_BATTERY_SERVICES := true
+    LOCAL_CFLAGS += -DTW_CUSTOM_BATTERY_PATH=$(TW_CUSTOM_BATTERY_PATH)
 endif
 ifneq ($(TW_CUSTOM_CPU_TEMP_PATH),)
 	LOCAL_CFLAGS += -DTW_CUSTOM_CPU_TEMP_PATH=$(TW_CUSTOM_CPU_TEMP_PATH)
@@ -459,6 +475,12 @@ endif
 ifeq ($(TW_ENABLE_BLKDISCARD), true)
     LOCAL_CFLAGS += -DTW_ENABLE_BLKDISCARD
 endif
+ifeq ($(TW_SKIP_ADDITIONAL_FSTAB), true)
+    LOCAL_CFLAGS += -DTW_SKIP_ADDITIONAL_FSTAB
+endif
+ifeq ($(TW_FORCE_KEYMASTER_VER), true)
+    LOCAL_CFLAGS += -DTW_FORCE_KEYMASTER_VER
+endif
 
 LOCAL_C_INCLUDES += system/vold \
 
@@ -528,6 +550,19 @@ TWRP_REQUIRED_MODULES += \
     hwservicemanager.rc \
     vndservicemanager \
     vndservicemanager.rc
+
+ifneq ($(TW_EXCLUDE_NANO), true)
+TWRP_REQUIRED_MODULES += \
+    nano_twrp \
+    nano.rc
+endif
+
+ifneq ($(TW_EXCLUDE_BASH), true)
+    ifneq ($(wildcard external/bash/.),)
+    TWRP_REQUIRED_MODULES += \
+        bash_twrp
+    endif
+endif
 
 ifneq ($(TW_INCLUDE_CRYPTO),)
 TWRP_REQUIRED_MODULES += \

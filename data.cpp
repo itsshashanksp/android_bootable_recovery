@@ -573,8 +573,10 @@ int DataManager::ShowProgress(float Portion, const float Seconds)
 
 void DataManager::update_tz_environment_variables(void)
 {
-	setenv("TZ", GetStrValue(TW_TIME_ZONE_VAR).c_str(), 1);
+	string TZ = GetStrValue(TW_TIME_ZONE_VAR);
+	setenv("TZ", TZ.c_str(), 1);
 	tzset();
+	property_set("persist.sys.timezone", TZ.c_str());
 }
 
 void DataManager::SetBackupFolder()
@@ -812,18 +814,7 @@ void DataManager::SetDefaultValues()
 	mPersist.SetValue(PB_DO_SYSTEM_ON_OTA, "1");
 	mPersist.SetValue("pb_verify_incremental_ota_signature", "1");
 	mPersist.SetValue(PB_INCREMENTAL_PACKAGE, "0");
-	mPersist.SetValue(PB_DISABLE_FORCED_ENCRYPTION, "0");
 	mPersist.SetValue(PB_ENABLE_ADVANCE_ENCRY, "0");
-#ifdef PB_DISABLE_DEFAULT_DM_VERITY
-	mPersist.SetValue(PB_DISABLE_DM_VERITY, "0");
-#else
-	mPersist.SetValue(PB_DISABLE_DM_VERITY, "1");
-#endif
-#ifdef PB_DISABLE_DEFAULT_PATCH_AVB2
-	mPersist.SetValue(PB_PATCH_AVB2, "0");
-#else
-	mPersist.SetValue(PB_PATCH_AVB2, "1");
-#endif
 #ifdef PB_DISABLE_DEFAULT_TREBLE_COMP
 	mPersist.SetValue(PB_TREBLE_COMP, "1");
 #else
@@ -906,6 +897,16 @@ void DataManager::SetDefaultValues()
 #else
 	mConst.SetValue("tw_uses_initramfs", "0");
 #endif
+#if defined BOARD_USES_RECOVERY_AS_BOOT || defined BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT
+	mConst.SetValue("tw_include_install_recovery_ramdisk", "1");
+#else
+	mConst.SetValue("tw_include_install_recovery_ramdisk", "0");
+#endif
+#ifdef BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT
+	mConst.SetValue("tw_is_vendor_boot", "1");
+#else
+	mConst.SetValue("tw_is_vendor_boot", "0");
+#endif
 #ifdef TW_NO_SCREEN_TIMEOUT
 	mConst.SetValue("tw_screen_timeout_secs", "0");
 	mConst.SetValue("tw_no_screen_timeout", "1");
@@ -913,6 +914,15 @@ void DataManager::SetDefaultValues()
 	mPersist.SetValue("tw_screen_timeout_secs", "60");
 	mPersist.SetValue("tw_no_screen_timeout", "0");
 #endif
+#ifdef BOARD_BOOT_HEADER_VERSION
+	mConst.SetValue("tw_boot_header_version", BOARD_BOOT_HEADER_VERSION);
+#endif
+
+	if (GetIntValue("tw_is_vendor_boot") == 1 && GetIntValue("tw_boot_header_version") == 3)
+		mConst.SetValue("tw_is_vendor_boot_header_v3", "1");
+	else
+		mConst.SetValue("tw_is_vendor_boot_header_v3", "0");
+
 	mData.SetValue("tw_gui_done", "0");
 	mData.SetValue("tw_encrypt_backup", "0");
 	mData.SetValue("tw_sleep_total", "5");

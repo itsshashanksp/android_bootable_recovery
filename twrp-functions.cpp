@@ -45,6 +45,7 @@
 #include <android-base/chrono_utils.h>
 
 #include "twrp-functions.hpp"
+#include "abx-functions.hpp"
 #include "twcommon.h"
 #include "gui/gui.hpp"
 #include <fs_mgr_priv_boot_config.h>
@@ -56,6 +57,8 @@
 #include "cutils/properties.h"
 #include "cutils/android_reboot.h"
 #include <sys/reboot.h>
+#include "gui/rapidxml.hpp"
+#include "gui/pages.hpp"
 #endif // ndef BUILD_TWRPTAR_MAIN
 #ifndef TW_EXCLUDE_ENCRYPTED_BACKUPS
 	#include "openaes/inc/oaes_lib.h"
@@ -75,7 +78,6 @@ static const string split_img = tmp + "split_img/";
 static string default_prop = ramdisk + "default.prop";
 static string fstab1 = PartitionManager.Get_Android_Root_Path() + "/vendor/etc";
 static string fstab2 = "/vendor/etc";
-static int trb_en = 0;
 static string dtb = "", ram = "";
 
 struct selabel_handle *selinux_handle;
@@ -1559,353 +1561,6 @@ int TWFunc::check_encrypt_status() {
 	return status;
 }
 
-static bool Patch_AVBDM_Verity() {
-	bool status = false, def = false;
-	DIR* d;
-	DIR* d1 = nullptr;
-	struct dirent* de;
-	int stat = 0;
-	string path, fstab = "", cmp, remove = "verify,;,verify;verify;,avb;avb;avb,;support_scfs,;,support_scfs;support_scfs;";
-	if (ram.find("ramdisk") != string::npos) {
-		d = opendir(ramdisk.c_str());
-		if (d == NULL)
-		{
-			LOGINFO("Unable to open '%s'\n", ramdisk.c_str());
-			return false;
-		}
-		while ((de = readdir(d)) != NULL)
-		{
-			cmp = de->d_name;
-			path = ramdisk + cmp;
-			if (cmp.find("fstab.") != string::npos)
-			{
-				gui_msg(Msg("pb_fstab=Detected fstab: '{1}'")(cmp));
-				LOGINFO("Fstab Found at '%s'\n", ramdisk.c_str());
-				stat = 1;
-				if (!status)
-				{
-					if (TWFunc::CheckWord(path, "verify")
-					|| TWFunc::CheckWord(path, "support_scfs")
-					|| TWFunc::CheckWord(path, "avb"))
-						status = true;
-				}
-				TWFunc::Replace_Word_In_File(path, remove);
-			}
-			if (cmp == "default.prop")
-			{
-				if (TWFunc::CheckWord(path, "ro.config.dmverity="))
-				{
-					if (TWFunc::CheckWord(path, "ro.config.dmverity=true"))
-						TWFunc::Replace_Word_In_File(path, "ro.config.dmverity=true;", "ro.config.dmverity=false");
-				}
-				else
-				{
-					ofstream File(path.c_str(), ios_base::app | ios_base::out);  
-					if (File.is_open())
-					{
-						def = true;
-						File << "ro.config.dmverity=false" << endl;
-						File.close();
-					}
-				}
-			}
-		}
-		closedir (d);
-	}
-
-	if (stat == 0)
-	{
-		if(trb_en == 1 || PartitionManager.Mount_By_Path("/vendor", false))
-		{
-			d1 = opendir(fstab2.c_str());
-			stat = 2;
-		}
-		else
-		{
-			PartitionManager.Mount_By_Path(PartitionManager.Get_Android_Root_Path(), false);
-			d1 = opendir(fstab1.c_str());
-			stat = 1;
-		}
-		if (d1 == NULL)
-		{
-			if(stat == 2)
-				LOGINFO("Unable to open '%s'\n", fstab2.c_str());
-			else if(stat == 1)
-				LOGINFO("Unable to open '%s'\n", fstab1.c_str());
-			return false;
-		}
-		while ((de = readdir(d1)) != NULL)
-		{
-			cmp = de->d_name;
-			if (stat == 2)
-				path = fstab2 + "/" + cmp;
-			else if (stat == 1)
-				path = fstab1 + "/" + cmp;
-			if (cmp.find("fstab.") != string::npos)
-			{
-				fstab = cmp;
-				gui_msg(Msg("pb_fstab=Detected fstab: '{1}'")(cmp));
-				if (stat == 2)
-					LOGINFO("Fstab Found at '%s'\n", fstab2.c_str());
-				else if (stat == 1)
-					LOGINFO("Fstab Found at '%s'\n", fstab1.c_str());
-				if (!status)
-				{
-					if (TWFunc::CheckWord(path, "verify")
-					|| TWFunc::CheckWord(path, "support_scfs")
-					|| TWFunc::CheckWord(path, "avb"))
-						status = true;
-				}
-				TWFunc::Replace_Word_In_File(path, remove);
-
-			}
-			if (cmp == "default.prop")
-			{
-				def = true;
-				if (TWFunc::CheckWord(path, "ro.config.dmverity="))
-				{
-					if (TWFunc::CheckWord(path, "ro.config.dmverity=true"))
-						TWFunc::Replace_Word_In_File(path, "ro.config.dmverity=true;", "ro.config.dmverity=false");
-				}
-				else
-				{
-					ofstream File(path.c_str(), ios_base::app | ios_base::out);  
-					if (File.is_open())
-					{
-						File << "ro.config.dmverity=false" << endl;
-						File.close();
-					}			
-				}
-			}
-		}
-	        closedir (d1);
-		chmod(fstab.c_str(), 0644);
-		//additional check for default.prop
-		if(!def) {
-			if (PartitionManager.Is_Mounted_By_Path("/vendor")) 
-				path = fstab2 + "/default.prop" ;
-			else
-				path = fstab1 + "/default.prop";
-			if (TWFunc::CheckWord(path, "ro.config.dmverity="))
-			{
-				if (TWFunc::CheckWord(path, "ro.config.dmverity=true"))
-					TWFunc::Replace_Word_In_File(path, "ro.config.dmverity=true;", "ro.config.dmverity=false");
-			}
-		}
-		//end
-	}
-	return status;
-}
-
-bool TWFunc::Patch_DM_Verity() {
-	bool status = false;
-	string firmware_key = ramdisk + "sbin/firmware_key.cer";
-	string null, sys_rt = TWFunc::check_system_root() ? "true" : "false";
-	if (sys_rt == "false")
-		status = Patch_AVBDM_Verity();
-
-	if (TWFunc::Path_Exists(ramdisk + "verity_key")) {
-		gui_msg(Msg("pb_unlink=Unlinking: '{1}'")("verity_key"));
-		unlink((ramdisk + "verity_key").c_str());
-	}
-	LOGINFO("DTB Found at '%s'\n", dtb.c_str());
-	setenv("KEEPVERITY", sys_rt.c_str(), true);
-
-	if (TWFunc::Path_Exists(firmware_key))
-	{
-		gui_msg(Msg("pb_unlink=Unlinking: '{1}'")("firmware_key.cer"));
-		unlink(firmware_key.c_str());
-	}
-
-	if(PartitionManager.Is_Mounted_By_Path("/vendor"))
-		PartitionManager.UnMount_By_Path("/vendor", false);
-	else if(PartitionManager.Is_Mounted_By_Path("/cust"))
-		PartitionManager.UnMount_By_Path("/cust", false);
-	if(PartitionManager.Is_Mounted_By_Path(PartitionManager.Get_Android_Root_Path()))
-	        PartitionManager.UnMount_By_Path(PartitionManager.Get_Android_Root_Path(), false);
-	return status;
-}            
-
-bool TWFunc::Patch_Forced_Encryption()
-{
-	string path, null, fstab = "", cmp, command = "";
-	command = "sed -i \"";
-	int stat = 0;
-	string remove[] = {"forceencrypt=", "forcefdeorfbe=", "fileencryption="};
-	for(int i=0;i<=2;i++)
-	{
-		if(i < 2)
-			command += "s|" + remove[i] + "|encryptable=|g; ";
-		else
-			command += "s|" + remove[i] + "|encryptable=|g;\"";
-	}
-
-	bool status = false;
-	int encryption;
-	DataManager::GetValue(PB_DISABLE_DM_VERITY, encryption);
-	DIR* d;
-	DIR* d1 = nullptr;
-	struct dirent* de;
-	if (ram.find("ramdisk") != string::npos) {
-		d = opendir(ramdisk.c_str());
-		if (d == NULL)
-		{
-			LOGINFO("Unable to open '%s'\n", ramdisk.c_str());
-			return false;
-		}
-		while ((de = readdir(d)) != NULL)
-		{
-			cmp = de->d_name;
-			path = ramdisk + cmp;
-			if (cmp.find("fstab.") != string::npos)
-			{
-				if (encryption != 1)
-				{
-					gui_msg(Msg("pb_fstab=Detected fstab: '{1}'")(cmp));
-					LOGINFO("Fstab Found at '%s'\n", ramdisk.c_str());
-				}
-				stat = 1;
-				if (!status)
-				{
-					if (TWFunc::Exec_Cmd(command + " " + path, null) == 0)
-						if(null.empty())
-						{
-							command="";
-							status = true;
-						}
-				}
-			}
-		}
-		closedir (d);
-	}
-	if (stat == 0 || ram.find("ramdisk") != string::npos)
-	{
-		if(trb_en == 1 || PartitionManager.Mount_By_Path("/vendor", false))
-		{
-			//PartitionManager.Mount_By_Path("/vendor", false);
-			d1 = opendir(fstab2.c_str());
-			stat = 2;
-		}
-		else
-		{
-			PartitionManager.Mount_By_Path(PartitionManager.Get_Android_Root_Path(), false);
-			d1 = opendir(fstab1.c_str());
-			stat = 1;
-		}
-		if (d1 == NULL)
-		{
-			if(stat == 2)
-				LOGINFO("Unable to open '%s'\n", fstab2.c_str());
-			else if(stat == 1)
-				LOGINFO("Unable to open '%s'\n", fstab1.c_str());
-			return false;
-		}
-		while ((de = readdir(d1)) != NULL)
-		{
-			cmp = de->d_name;
-			if (stat == 2)
-				path = fstab2 + "/" + cmp;
-			else if (stat == 1)
-				path = fstab1 + "/" + cmp;
-			if (cmp.find("fstab.") != string::npos)
-			{
-				fstab = cmp;
-			        if (encryption != 1)
-				{
-					gui_msg(Msg("pb_fstab=Detected fstab: '{1}'")(cmp));
-				if (stat == 2)
-					LOGINFO("Fstab Found at '%s'\n", fstab2.c_str());
-				else if (stat == 1)
-					LOGINFO("Fstab Found at '%s'\n", fstab1.c_str());
-				}
-				if (!status)
-				{
-					if (TWFunc::Exec_Cmd(command + " " + path, null) == 0)
-					{
-						if(null.empty())
-						{
-							command="";
-							status = true;
-						}
-					}
-				}
-		       }
-	        }
-	        closedir (d1);
-		chmod(fstab.c_str(), 0644);
-
-	}
-	if(PartitionManager.Is_Mounted_By_Path("/vendor"))
-		PartitionManager.UnMount_By_Path("/vendor", false);
-	else if(PartitionManager.Is_Mounted_By_Path("/cust"))
-		PartitionManager.UnMount_By_Path("/cust", false);
-	if(PartitionManager.Is_Mounted_By_Path(PartitionManager.Get_Android_Root_Path()))
-	        PartitionManager.UnMount_By_Path(PartitionManager.Get_Android_Root_Path(), false);
-	return status;
-}
-    
-void TWFunc::Deactivation_Process(void)
-{
-	string out;
-	if(PartitionManager.Is_Mounted_By_Path("/vendor"))
-		PartitionManager.UnMount_By_Path("/vendor", false);
-	else if(PartitionManager.Is_Mounted_By_Path("/cust"))
-		PartitionManager.UnMount_By_Path("/cust", false);
-	if(PartitionManager.Is_Mounted_By_Path(PartitionManager.Get_Android_Root_Path()))
-	        PartitionManager.UnMount_By_Path(PartitionManager.Get_Android_Root_Path(), false);
-	if (DataManager::GetIntValue(PB_DISABLE_DM_VERITY) == 1) {
-		if (!Unpack_Image("/boot")) {
-			LOGINFO("Deactivation_Process: Unable to unpack image\n");
-			return;
-		}
-		gui_msg(Msg(msg::kProcess, "pb_run_process=Starting '{1}' process")("PitchBlack"));
-		DataManager::GetValue(TRB_EN, trb_en);
-		if (TWFunc::check_encrypt_status() != 0 && DataManager::GetIntValue(PB_ENABLE_ADVANCE_ENCRY) == 0) {
-			gui_msg(Msg(msg::kHighlight, "pb_ecryption_leave=Device Encrypted Leaving Forceencrypt"));
-			setenv("KEEPFORCEENCRYPT", "true", true);
-			DataManager::SetValue(PB_DISABLE_FORCED_ENCRYPTION, 0);
-		}
-		else {
-			setenv("KEEPFORCEENCRYPT", "false", true);
-			DataManager::SetValue(PB_DISABLE_FORCED_ENCRYPTION, 1);
-		}
-
-		if (DataManager::GetIntValue(PB_DISABLE_DM_VERITY) == 1) {
-			if (!Patch_DM_Verity())
-				gui_print_color("warning", "DM-Verity is not enabled\n");
-		}
-
-		if (DataManager::GetIntValue(PB_DISABLE_FORCED_ENCRYPTION) == 1) {
-			if (!Patch_Forced_Encryption())
-				gui_print_color("warning", "Forced Encryption is not enabled\n");
-		}
-
-		gui_msg(Msg("pb_patching=Patching: '{1}'")("ramdisk"));
-		TWFunc::Exec_Cmd("cd /tmp/pb/split_img && /system/bin/magiskboot cpio ramdisk.cpio patch", out);
-		gui_msg(Msg("pb_patching=Patching: '{1}'")("dtb"));
-		TWFunc::Exec_Cmd("cd /tmp/pb/split_img && /system/bin/magiskboot dtb " + dtb + " patch", out);
-		unsetenv("KEEPFORCEENCRYPT");
-		unsetenv("KEEPVERITY");
-		out="";
-		if (!Repack_Image("/boot")) {
-			gui_msg(Msg(msg::kError, "pb_run_process_fail=Unable to finish '{1}' process")("PitchBlack"));
-			return;
-		}
-
-		if (DataManager::GetIntValue(PB_PATCH_AVB2) == 1) {
-			TWPartition* Partition = PartitionManager.Find_Partition_By_Path("/boot");
-			if(PBFunc::patchAVB(Partition->Actual_Block_Device.c_str()) == 0) {
-				gui_msg(Msg("pb_patch_avb2=Patched AVB2.0"));
-			} else {
-				gui_msg(Msg("pb_patch_avb_no=AVB2.0 not available"));
-			}
-		}
-
-		gui_msg(Msg(msg::kProcess, "pb_run_process_done=Finished '{1}' process")("PitchBlack"));
-		return;
-	}
-}
-
 void TWFunc::Read_Write_Specific_Partition(string path, string partition_name, bool backup) {
 	TWPartition* Partition = PartitionManager.Find_Partition_By_Path(partition_name);
 	if (Partition == NULL || Partition->Current_File_System != "emmc") {
@@ -2249,21 +1904,6 @@ std::string TWFunc::getprop(std::string arg)
 	return value;
 }
 
-bool TWFunc::Check_Xml_Format(const std::string filename) {
-	std::string buffer(' ', 4);
-	std::string abx_hdr("ABX\x00", 4);
-	std::ifstream File;
-	File.open(filename);
-	if (File.is_open()) {
-		File.get(&buffer[0], buffer.size());
-		File.close();
-		// Android Binary Xml start from these bytes
-		if(!buffer.compare(0, abx_hdr.size(), abx_hdr))
-			return false; // ABX format - requires conversion
-	}
-	return true; // good format, possible to parse
-}
-
 std::string GetFstabPath() {
 	for (const char* prop : {"fstab_suffix", "hardware", "hardware.platform"}) {
 		std::string suffix;
@@ -2290,54 +1930,127 @@ bool TWFunc::Find_Fstab(string &fstab) {
 	return true;
 }
 
-bool TWFunc::Get_Service_From(TWPartition *Partition, std::string Service, std::string &Res) {
-	Partition->Mount(true);
-	std::string Path = Partition->Get_Mount_Point() + "/etc/init/";
-	std::string Name;
-	std::vector<std::string> Data;
-	bool Found = false, ret = false;
-	DIR* dir;
-	struct dirent* der;
-	dir = opendir(Path.c_str());
-	while ((der = readdir(dir)) != NULL)
-	{
-		Name = der->d_name;
-		if (Name.find(Service) != string::npos) {
-			Found = true;
-			Path += Name;
-			break;
-		}
-	}
-	closedir(dir);
+static inline std::string Get_Version_From_FQ(std::string name) {
+	int start, end;
+	start = name.find('@') + 1;
+	end = name.find(":") - start;
+	return name.substr(start, end);
+}
 
-	if (!Found) {
-		LOGINFO("Unable to locate service RC\n");
-		goto finish;
+bool TWFunc::Get_Service_From_Manifest(std::string basepath, std::string service, std::string &res) {
+	std::string manifestpath, filename, platform;
+	manifestpath = basepath + "/etc/vintf/";
+	bool ret = false;
+
+	// Prefer using ro.boot.product.vendor.sku property, following AOSP VintfObject::fetchVendorHalManifest
+	// If not set, also try ro.board.platform.
+	platform = android::base::GetProperty("ro.boot.product.vendor.sku", "");
+	if (platform.empty()) {
+		LOGINFO("Property ro.boot.product.vendor.sku not found, trying to get vintf manifest file name from ro.board.platform\n");
+		platform = android::base::GetProperty("ro.board.platform", "");
 	}
 
-	if (read_file(Path, Data) != 0) {
-		LOGINFO("Unable to read file '%s'\n", Path.c_str());
-		goto finish;
-	}
-
-	for (int index = 0; index < Data.size(); index++) {
-		Name = Data.at(index);
-		if (Name.find("service") != string::npos) {
-			Res = Name.substr(Name.find_last_of('/')+1);
-			ret = true;
-			goto finish;
+	// Let's find the service xml if exists
+	Exec_Cmd("find " + manifestpath + "manifest/ -type f -name *" + service + "*", filename, false);
+	if (filename.empty()) {
+		LOGINFO("Separate manifest doesn't exist for '%s'\n", service.c_str());
+		// Look for manifest_PLATFORM.xml
+		filename = manifestpath + "manifest_" + platform + ".xml";
+		if (!Path_Exists(filename)) {
+			// Use legacy manifest path if platform manifest is not found.
+			LOGINFO("%s not found. Using default path for manifest.xml\n", filename.c_str());
+			filename = manifestpath + "manifest.xml";
 		}
 	}
 
-finish:
-	Partition->UnMount(true);
+	if (Path_Exists(filename)) {
+		char* manifest = PageManager::LoadFileToBuffer(filename, NULL);
+		LOGINFO("Looking for '%s' service in manifest\n", service.c_str());
+		xml_document<>* vintfManifest = new xml_document<>();
+		vintfManifest->parse<0>(manifest);
+		xml_node<>* manifestNode = vintfManifest->first_node("manifest");
+		std::string version;
+		if (manifestNode) {
+			for (xml_node<>* child = manifestNode->first_node(); child; child = child->next_sibling()) {
+				std::string type = child->name();
+				if (type == "hal") {
+					xml_node<>* nameNode = child->first_node("name");
+					type = nameNode->value();
+					if (type == service) {
+						xml_node<> *versionNode = child->first_node("version");
+						if (versionNode != nullptr) {
+							LOGINFO("Found version in manifest: %s\n", versionNode->value());
+						} else {
+							versionNode = child->first_node("fqname");
+							if (versionNode == nullptr) return ret;
+							LOGINFO("Found fqname in manifest: %s\n", versionNode->value());
+						}
+						version = versionNode->value();
+						if (version.find('@') == std::string::npos) {
+							res = version;
+						} else {
+							res = Get_Version_From_FQ(version);
+						}
+						ret = true;
+					}
+				}
+			}
+		}
+	}
 	return ret;
 }
 
-std::string TWFunc::Get_Version_From_Service(std::string name) {
-	int start, end;
-	start = name.find('@') + 1;
-	end = name.find("-") - start;
-	return name.substr(start, end);
+bool TWFunc::Check_Xml_Format(const std::string filename) {
+	std::string buffer(' ', 4);
+	std::string abx_hdr("ABX\x00", 4);
+	std::ifstream File;
+	File.open(filename);
+	if (File.is_open()) {
+		File.get(&buffer[0], buffer.size());
+		File.close();
+		// Android Binary Xml start from these bytes
+		if(!buffer.compare(0, abx_hdr.size(), abx_hdr))
+			return false; // ABX format - requires conversion
+	}
+	return true; // good format, possible to parse
 }
+
+// return true=successful conversion (return the name of the converted file in "result");
+// return false=an error happened (leave "result" alone)
+bool TWFunc::abx_to_xml(const std::string path, std::string &result) {
+	bool res = false;
+	if (!TWFunc::Path_Exists(path))
+		return res;
+
+	std::ifstream infile(path);
+	if (!infile.is_open())
+		return res;
+
+	std::string fname = TWFunc::Get_Filename(path);
+	std::string tmp = "/tmp/converted_xml";
+	if (!TWFunc::Path_Exists(tmp)) {
+		if (mkdir(tmp.c_str(), 0777) != 0)
+			tmp = "/tmp";
+	}
+
+	std::string tmp_path = tmp + "/" + fname;
+	std::ofstream outfile(tmp_path);
+	if (!outfile.is_open()) {
+		LOGINFO("Error. The abx conversion of %s has failed.\n", path.c_str());
+		infile.close();
+		return res;
+	}
+
+	AbxToXml r(infile, outfile);
+	if (r.run() && TWFunc::Path_Exists(tmp_path)) {
+		res = true;
+		result = tmp_path;
+	}
+
+	infile.close();
+	outfile.close();
+
+	return res;
+}
+
 #endif // ndef BUILD_TWRPTAR_MAIN
